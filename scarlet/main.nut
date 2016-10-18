@@ -18,8 +18,11 @@ function Scarlet::Start() {
     //AILog.Info(cargo);
     //AILog.Info(truck_station);
     AILog.Info("Connected towns: " + towns);
-    BuildSrcRoadStation(towns[0], cargo);
+    local station_tile = BuildSrcRoadStation(towns[0], cargo);
     BuildDstRoadStation(towns[1], cargo);
+    if (station_tile != null) {
+        BuildRoadDepotNear(station_tile);
+    }
     while(true) {
         AILog.Info("I am a very new AI with a ticker called MyNewAI and I am at tick " + this.GetTick());
         this.Sleep(50);
@@ -34,19 +37,18 @@ function Scarlet::BuildSrcRoadStation (townid, cargo) {
     tilelist.Valuate(AITile.GetCargoProduction, cargo, 1, 1, rad);
     tilelist.KeepAboveValue(0);
     local success = false;
+    local station_tile = null;
     AILog.Info("Trying to build station");
     foreach (tile, value in tilelist) {
         if (AITile.GetSlope(tile) == AITile.SLOPE_FLAT) {
-            local neighbours = AITileList();
-            neighbours.AddRectangle(tile-1, tile + 1);
-            neighbours.Valuate(AIRoad.IsRoadTile);
-            neighbours.KeepValue(1);
+            local neighbours = GetNeighbourRoad(tile);
             foreach (neighbour, value in neighbours) {
                 success = AIRoad.BuildRoadStation(tile, neighbour,
                                            AIRoad.ROADVEHTYPE_TRUCK,
                                            AIStation.STATION_NEW);
                 if(success) {
                   AIRoad.BuildRoad(tile, neighbour);
+                  station_tile = tile;
                   break;
                   }
             }
@@ -58,6 +60,14 @@ function Scarlet::BuildSrcRoadStation (townid, cargo) {
     } else {
         AILog.Info("Cannot build station");
     }
+    return station_tile;
+}
+
+function Scarlet::GetNeighbourRoad(tile) {
+    local neighbours = GetTilesAround(tile, 1);
+    neighbours.Valuate(AIRoad.IsRoadTile);
+    neighbours.KeepValue(1);
+    return neighbours;
 }
 
 function Scarlet::BuildDstRoadStation (townid, cargo) {
@@ -67,20 +77,20 @@ function Scarlet::BuildDstRoadStation (townid, cargo) {
     tilelist.KeepValue(1);
     tilelist.Valuate(AITile.GetCargoAcceptance, cargo, 1, 1, rad);
     tilelist.KeepAboveValue(8);
+    tilelist.Sort(AIAbstractList.SORT_BY_VALUE, false);
     local success = false;
+    local station_tile = null;
     AILog.Info("Trying to build station");
     foreach (tile, value in tilelist) {
         if (AITile.GetSlope(tile) == AITile.SLOPE_FLAT) {
-            local neighbours = AITileList();
-            neighbours.AddRectangle(tile-1, tile + 1);
-            neighbours.Valuate(AIRoad.IsRoadTile);
-            neighbours.KeepValue(1);
+            local neighbours = GetNeighbourRoad(tile);
             foreach (neighbour, value in neighbours) {
                 success = AIRoad.BuildRoadStation(tile, neighbour,
                                            AIRoad.ROADVEHTYPE_TRUCK,
                                            AIStation.STATION_NEW);
                 if(success) {
                   AIRoad.BuildRoad(tile, neighbour);
+                  station_tile = tile;
                   break;
                   }
             }
@@ -92,22 +102,58 @@ function Scarlet::BuildDstRoadStation (townid, cargo) {
     } else {
         AILog.Info("Cannot build station");
     }
+    return station_tile;
 }
 
-function Scarlet::GetTilesAroundTown(town_id, width, height) {
+function Scarlet::BuildRoadDepotNear(tile) {
+    local success = false;
+    for (local i = 1; i<10; i=i+1) {
+        AILog.Info("Counter: " + i);
+        local tilelist = GetTilesAround(tile, i);
+        tilelist.Valuate(AITile.IsBuildable);
+        tilelist.KeepValue(1);
+        AILog.Info("Trying to build depot");
+        foreach (tile, value in tilelist) {
+            if (AITile.GetSlope(tile) == AITile.SLOPE_FLAT) {
+                local neighbours = GetNeighbourRoad(tile);
+                foreach (neighbour, value in neighbours) {
+                    success = AIRoad.BuildRoadDepot(tile, neighbour);
+                    if(success) {
+                      AIRoad.BuildRoad(tile, neighbour);
+                      break;
+                    }
+                }
+            }
+            if (success) break;
+        }
+        if (success) {
+            AILog.Info("Successfuly built station");
+            break;
+        } else {
+            AILog.Info("Cannot build station");
+        }
+    }
+}
+
+function Scarlet::GetTilesAround(tile, radius) {
     local tiles = AITileList();
-    local townplace = AITown.GetLocation(town_id);
-    local distedge = AIMap.DistanceFromEdge(townplace);
     local offset = null;
-    local radius = 15;
-    if (AITown.GetPopulation(town_id) > 5000) radius = 30;
+    local distedge = AIMap.DistanceFromEdge(tile);
     // A bit different is the town is near the edge of the map
     if (distedge < radius + 1) {
         offset = AIMap.GetTileIndex(distedge - 1, distedge - 1);
     } else {
         offset = AIMap.GetTileIndex(radius, radius);
     }
-    tiles.AddRectangle(townplace - offset, townplace + offset);
+    tiles.AddRectangle(tile - offset, tile + offset);
+    return tiles;
+}
+
+function Scarlet::GetTilesAroundTown(town_id, width, height) {
+    local townplace = AITown.GetLocation(town_id);
+    local radius = 15;
+    if (AITown.GetPopulation(town_id) > 5000) radius = 30;
+    local tiles = GetTilesAround(townplace, radius);
     tiles.Valuate(Scarlet.IsRectangleWithinTownInfluence, town_id, width, height);
     tiles.KeepValue(1);
     return tiles;
