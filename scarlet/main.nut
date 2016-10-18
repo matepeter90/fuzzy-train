@@ -11,7 +11,7 @@ function Scarlet::Start() {
         i = i + 1;
         }
     }
-    
+
     local towns = BuildRichRoad();
     local cargo = FindRichCargo()
     //local truck_station = !AICargo.HasCargoClass(cargo, AICargo.CC_PASSENGERS);
@@ -19,18 +19,19 @@ function Scarlet::Start() {
     //AILog.Info(truck_station);
     AILog.Info("Connected towns: " + towns);
     BuildSrcRoadStation(towns[0], cargo);
+    BuildDstRoadStation(towns[1], cargo);
     while(true) {
         AILog.Info("I am a very new AI with a ticker called MyNewAI and I am at tick " + this.GetTick());
         this.Sleep(50);
-    } 
-} 
+    }
+}
 
 function Scarlet::BuildSrcRoadStation (townid, cargo) {
     local rad = AIStation.GetCoverageRadius(AIStation.STATION_TRUCK_STOP);
     local tilelist = GetTilesAroundTown(townid, 1, 1);
     tilelist.Valuate(AITile.IsBuildable);
     tilelist.KeepValue(1);
-    tilelist.Valuate(AITile.GetCargoProduction, cargo, 1, 1, rad); 
+    tilelist.Valuate(AITile.GetCargoProduction, cargo, 1, 1, rad);
     tilelist.KeepAboveValue(0);
     local success = false;
     AILog.Info("Trying to build station");
@@ -44,7 +45,10 @@ function Scarlet::BuildSrcRoadStation (townid, cargo) {
                 success = AIRoad.BuildRoadStation(tile, neighbour,
                                            AIRoad.ROADVEHTYPE_TRUCK,
                                            AIStation.STATION_NEW);
-                if(success) break;
+                if(success) {
+                  AIRoad.BuildRoad(tile, neighbour);
+                  break;
+                  }
             }
         }
         if (success) break;
@@ -53,7 +57,41 @@ function Scarlet::BuildSrcRoadStation (townid, cargo) {
         AILog.Info("Successfuly built station");
     } else {
         AILog.Info("Cannot build station");
-    } 
+    }
+}
+
+function Scarlet::BuildDstRoadStation (townid, cargo) {
+    local rad = AIStation.GetCoverageRadius(AIStation.STATION_TRUCK_STOP);
+    local tilelist = GetTilesAroundTown(townid, 1, 1);
+    tilelist.Valuate(AITile.IsBuildable);
+    tilelist.KeepValue(1);
+    tilelist.Valuate(AITile.GetCargoAcceptance, cargo, 1, 1, rad);
+    tilelist.KeepAboveValue(8);
+    local success = false;
+    AILog.Info("Trying to build station");
+    foreach (tile, value in tilelist) {
+        if (AITile.GetSlope(tile) == AITile.SLOPE_FLAT) {
+            local neighbours = AITileList();
+            neighbours.AddRectangle(tile-1, tile + 1);
+            neighbours.Valuate(AIRoad.IsRoadTile);
+            neighbours.KeepValue(1);
+            foreach (neighbour, value in neighbours) {
+                success = AIRoad.BuildRoadStation(tile, neighbour,
+                                           AIRoad.ROADVEHTYPE_TRUCK,
+                                           AIStation.STATION_NEW);
+                if(success) {
+                  AIRoad.BuildRoad(tile, neighbour);
+                  break;
+                  }
+            }
+        }
+        if (success) break;
+    }
+    if (success) {
+        AILog.Info("Successfuly built station");
+    } else {
+        AILog.Info("Cannot build station");
+    }
 }
 
 function Scarlet::GetTilesAroundTown(town_id, width, height) {
@@ -99,48 +137,48 @@ function Scarlet::FindRichCargo() {
 function Scarlet::BuildRichRoad() {
     /* Get a list of all towns on the map. */
     local townlist = AITownList();
-     
+
     /* Sort the list by population, highest population first. */
     townlist.Valuate(AITown.GetPopulation);
     townlist.Sort(AIAbstractList.SORT_BY_VALUE, false);
-  
+
     /* Pick the two towns with the highest population. */
     local townid_a = townlist.Begin();
     local townid_b = townlist.Next();
-    
+
     while(AITown.GetDistanceManhattanToTile(townid_a, AITown.GetLocation(townid_b)) > 70){
         AILog.Info("Dist: " + AITown.GetDistanceManhattanToTile(townid_a, AITown.GetLocation(townid_b)));
-        townid_b = townlist.Next(); 
+        townid_b = townlist.Next();
     }
-    
+
     /* Print the names of the towns we'll try to connect. */
     AILog.Info("Going to connect " + AITown.GetName(townid_a) + " to " + AITown.GetName(townid_b));
-  
+
     /* Tell OpenTTD we want to build normal road (no tram tracks). */
     AIRoad.SetCurrentRoadType(AIRoad.ROADTYPE_ROAD);
-  
+
     /* Create an instance of the pathfinder. */
     local pathfinder = RoadPathFinder();
-  
+
     /* Set the cost for making a turn extreme high. */
     pathfinder.cost.turn = 50;
-  
+
     /* Give the source and goal tiles to the pathfinder. */
     pathfinder.InitializePath([AITown.GetLocation(townid_a)], [AITown.GetLocation(townid_b)]);
-  
+
     /* Try to find a path. */
     local path = false;
     while (path == false) {
       path = pathfinder.FindPath(100);
       this.Sleep(1);
-      AILog.Error("Finding path..."); 
-    } 
+      AILog.Error("Finding path...");
+    }
 
     if (path == null) {
       /* No path was found. */
       AILog.Error("pathfinder.FindPath return null");
     }
-  
+
     /* If a path was found, build a road over it. */
     while (path != null) {
       local par = path.GetParent();
@@ -148,7 +186,7 @@ function Scarlet::BuildRichRoad() {
         local last_node = path.GetTile();
         if (AIMap.DistanceManhattan(path.GetTile(), par.GetTile()) == 1 ) {
           if (!AIRoad.BuildRoad(path.GetTile(), par.GetTile())) {
-            /* An error occured while building a piece of road. TODO: handle it. 
+            /* An error occured while building a piece of road. TODO: handle it.
              * Note that is can also be the case that the road was already build. */
           }
         } else {
