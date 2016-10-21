@@ -25,7 +25,11 @@ function Scarlet::Start() {
         local depot_tile = BuildRoadDepotNear(src_tile);
         if (depot_tile != null) {
             AILog.Info("Building vehicle");
-            AIVehicle.BuildVehicle(depot_tile, GetBestRoadVehicle(cargo));
+            local vehicle = AIVehicle.BuildVehicle(depot_tile, GetBestRoadVehicle(cargo));
+            AIVehicle.RefitVehicle(vehicle, cargo);
+            AIOrder.AppendOrder(vehicle, src_tile, AIOrder.OF_FULL_LOAD_ANY);
+            AIOrder.AppendOrder(vehicle, dst_tile, AIOrder.OF_NONE);
+            AIVehicle.StartStopVehicle(vehicle);
         }
     }
     while(true) {
