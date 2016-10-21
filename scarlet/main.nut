@@ -13,15 +13,20 @@ function Scarlet::Start() {
     }
 
     local towns = BuildRichRoad();
-    local cargo = FindRichCargo()
+    local cargo = FindRichCargo();
+    local depot_tile;
     //local truck_station = !AICargo.HasCargoClass(cargo, AICargo.CC_PASSENGERS);
     //AILog.Info(cargo);
     //AILog.Info(truck_station);
     AILog.Info("Connected towns: " + towns);
-    local station_tile = BuildSrcRoadStation(towns[0], cargo);
-    BuildDstRoadStation(towns[1], cargo);
-    if (station_tile != null) {
-        BuildRoadDepotNear(station_tile);
+    local src_tile = BuildSrcRoadStation(towns[0], cargo);
+    local dst_tile = BuildDstRoadStation(towns[1], cargo);
+    if (src_tile != null) {
+        local depot_tile = BuildRoadDepotNear(src_tile);
+        if (depot_tile != null) {
+            AILog.Info("Building vehicle");
+            AIVehicle.BuildVehicle(depot_tile, GetBestRoadVehicle(cargo));
+        }
     }
     while(true) {
         AILog.Info("I am a very new AI with a ticker called MyNewAI and I am at tick " + this.GetTick());
@@ -70,6 +75,24 @@ function Scarlet::GetNeighbourRoad(tile) {
     return neighbours;
 }
 
+function Scarlet::GetBestRoadVehicle(cargo) {
+    local engines = AIEngineList(AIVehicle.VT_ROAD);
+    engines.Valuate(AIEngine.IsBuildable);
+    engines.KeepValue(1);
+    AILog.Info(engines);
+    engines.Valuate(AIEngine.CanRefitCargo,cargo);
+    engines.KeepValue(1);
+    engines.Valuate(GetEngineScore);
+    engines.Sort(AIAbstractList.SORT_BY_VALUE, false);
+    return engines.Begin();
+}
+
+function Scarlet::GetEngineScore(engine){
+    local score = AIEngine.GetCapacity(engine) * AIEngine.GetPower(engine) * AIEngine.GetMaxSpeed(engine) * AIEngine.GetReliability(engine);
+    score = score / (AIEngine.GetRunningCost(engine) * AIEngine.GetPrice(engine) * AIEngine.GetRunningCost(engine));
+    return score;
+}
+
 function Scarlet::BuildDstRoadStation (townid, cargo) {
     local rad = AIStation.GetCoverageRadius(AIStation.STATION_TRUCK_STOP);
     local tilelist = GetTilesAroundTown(townid, 1, 1);
@@ -107,6 +130,7 @@ function Scarlet::BuildDstRoadStation (townid, cargo) {
 
 function Scarlet::BuildRoadDepotNear(tile) {
     local success = false;
+    local station_tile;
     for (local i = 1; i<10; i=i+1) {
         AILog.Info("Counter: " + i);
         local tilelist = GetTilesAround(tile, i);
@@ -120,19 +144,20 @@ function Scarlet::BuildRoadDepotNear(tile) {
                     success = AIRoad.BuildRoadDepot(tile, neighbour);
                     if(success) {
                       AIRoad.BuildRoad(tile, neighbour);
+                      station_tile = tile;
                       break;
-                    }
+                      }
                 }
             }
             if (success) break;
         }
         if (success) {
-            AILog.Info("Successfuly built station");
-            break;
-        } else {
-            AILog.Info("Cannot build station");
+            AILog.Info("Successfuly built depot");
+            return station_tile;
         }
     }
+    AILog.Info("Cannot build depot");
+    return null;
 }
 
 function Scarlet::GetTilesAround(tile, radius) {
