@@ -50,8 +50,8 @@ function RoadManager::ConnectNewCities(passenger_cargo) {
     local townloc_b = AITown.GetLocation(townid_b);
     AILog.Info("Connecting " + AITown.GetName(townid_a) + " with " + AITown.GetName(townid_b));
     if(RoadManager.ConnectTiles(townloc_a, townloc_b)) {
-        if(!RoadManager.Contains(RoadManager.connected_towns, townid_a)) connected_towns.townid_a = []
-        if(!RoadManager.Contains(RoadManager.connected_towns, townid_b)) connected_towns.townid_b = []
+        if(!RoadManager.Contains(RoadManager.connected_towns, townid_a)) connected_towns.townid_a <- []
+        if(!RoadManager.Contains(RoadManager.connected_towns, townid_b)) connected_towns.townid_b <- []
         local src = RoadManager.BuildSourceStationNear(townloc_a, passenger_cargo);
         local dst = RoadManager.BuildDestinationStationNear(townloc_b, passenger_cargo); 
         if(src != null && dst != null) {
@@ -75,11 +75,11 @@ function RoadManager::GetStationType(cargo) {
 }
 
 function RoadManager::BuildSourceStationNear(tile, cargo) {
-    return Manager.BuildSourceStationNear(tile, cargo, 1, 1, GetStationType(cargo));
+    return RoadManager.BuildStationNear(tile, cargo, AITile.GetCargoProduction) 
 }
 
 function RoadManager::BuildDestinationStationNear(tile, cargo) {
-    return Manager.BuildDestinationStationNear(tile, cargo, 1, 1, GetStationType(cargo));
+    return RoadManager.BuildStationNear(tile, cargo, AITile.GetCargoAcceptance) 
 }
 
 function RoadManager::GetNeighbourRoad(tile) {
@@ -87,6 +87,33 @@ function RoadManager::GetNeighbourRoad(tile) {
     neighbours.Valuate(AIRoad.IsRoadTile);
     neighbours.KeepValue(1);
     return neighbours;
+}
+
+function RoadManager::GetVehicleType(cargo) {
+    return (AICargo.HasCargoClass(cargo, AICargo.CC_PASSENGERS)) ? AIRoad.ROADVEHTYPE_BUS : AIRoad.ROADVEHTYPE_TRUCK;
+}
+
+function RoadManager::BuildStationNear(tile, cargo, valuator_fn) {
+    local tilelist = Manager.GetAvailableTiles(tile, cargo, 1, 1, GetStationType(cargo), valuator_fn);
+    AILog.Info("Trying to build station around " + tile);
+    foreach (available_tile, value in tilelist) {
+        if (AITile.GetSlope(available_tile) == AITile.SLOPE_FLAT) {
+            foreach (neighbour, value in GetNeighbourRoad(available_tile)) {
+                if(AIRoad.BuildRoadStation(available_tile, neighbour,
+                                           GetVehicleType(cargo),
+                                           AIStation.STATION_NEW)) {
+                    if(AIRoad.BuildRoad(available_tile, neighbour)) {
+                        AILog.Info("Successfuly built station around " + tile);
+                        return available_tile;
+                    } else {
+                        AIRoad.RemoveRoadStation(available_tile);
+                    }
+                }
+            }
+        }
+    }
+    AILog.Info("Cannot build station around " + tile);
+    return null;
 }
 
 function RoadManager::BuildRoadDepotNear(tile) {

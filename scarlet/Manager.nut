@@ -36,15 +36,7 @@ function Manager::GetTilesAround(tile, radius) {
     return tiles;
 }
 
-function Manager::BuildSourceStationNear(tile, cargo, width, height, station_type) {
-    return Manager.BuildStationNear(tile, cargo, width, height, station_type, AITile.GetCargoProduction) 
-}
-
-function Manager::BuildDestinationStationNear(tile, cargo, width, height, station_type) {
-    return Manager.BuildStationNear(tile, cargo, width, height, station_type, AITile.GetCargoAcceptance) 
-}
-
-function Manager::BuildStationNear(tile, cargo, width, height, station_type, valuator_fn) {
+function Manager::GetAvailableTiles(tile, cargo, width, height, station_type, valuator_fn) {
     local radius = 15;
     local station_radius = AIStation.GetCoverageRadius(station_type);
     //Set a bigger radius for big cities
@@ -61,23 +53,5 @@ function Manager::BuildStationNear(tile, cargo, width, height, station_type, val
     tilelist.Valuate(valuator_fn, cargo, width, height, station_radius);
     tilelist.KeepAboveValue(0);
     tilelist.Sort(AIAbstractList.SORT_BY_VALUE, false);
-    AILog.Info("Trying to build station around " + tile);
-    foreach (available_tile, value in tilelist) {
-        if (AITile.GetSlope(available_tile) == AITile.SLOPE_FLAT) {
-            foreach (neighbour, value in GetNeighbourRoad(available_tile)) {
-                if(AIRoad.BuildRoadStation(available_tile, neighbour,
-                                           AIRoad.ROADVEHTYPE_TRUCK,
-                                           AIStation.STATION_NEW)) {
-                    if(AIRoad.BuildRoad(available_tile, neighbour)) {
-                        AILog.Info("Successfuly built station around " + tile);
-                        return available_tile;
-                    } else {
-                        AIRoad.RemoveRoadStation(available_tile);
-                    }
-                }
-            }
-        }
-    }
-    AILog.Info("Cannot build station around " + tile);
-    return null;
+    return tilelist;
 }
