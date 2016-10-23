@@ -19,7 +19,7 @@ function Scarlet::Start() {
     local passenger_cargo = GetPassengerCargoID();
     local rm = RoadManager()
     while(true) {
-        if(passenger_cargo != -1 && rm.connected_towns_count < 5) {
+        if(passenger_cargo != -1 && rm.connected_towns.Count() < 10) {
             rm.ConnectNewCities(passenger_cargo);    
         }
         AILog.Info("I am a very new AI with a ticker called MyNewAI and I am at tick " + this.GetTick());

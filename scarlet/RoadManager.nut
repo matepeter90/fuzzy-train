@@ -2,13 +2,11 @@ require("Manager.nut");
 import("pathfinder.road", "RoadPathFinder", 4);
 
 class RoadManager extends Manager {
-    connected_towns = null;
-    connected_towns_count = 0;
-    
-    constructor() {
-        connected_towns = {};
-    }
+    connected_towns = null;    
 
+    constructor() {
+        connected_towns = AIList(); 
+    }
 }
 
 function RoadManager::Contains(table, element) {
@@ -20,9 +18,7 @@ function RoadManager::Contains(table, element) {
 }
 
 function RoadManager::IsConnected(townid_a, townid_b) {
-    if (!RoadManager.Contains(RoadManager.connected_towns, townid_a) || !RoadManager.Contains(RoadManager.connected_towns, townid_b))
-        return false;
-    return RoadManager.connected_towns.townid_a.find(townid_b) != null || RoadManager.connected_towns.townid_b.find(townid_a) != null;
+    return connected_towns.HasItem(townid_a) && connected_towns.HasItem(townid_b);
 }
 
 function RoadManager::GetBestRoadVehicle(cargo) {
@@ -31,27 +27,33 @@ function RoadManager::GetBestRoadVehicle(cargo) {
 
 function RoadManager::ConnectNewCities(passenger_cargo) {
     /* Get a list of all towns on the map. */
-    local townlist = AITownList();
+    local masterlist = AITownList();
 
     /* Sort the list by population, highest population first. */
-    townlist.Valuate(AITown.GetPopulation);
-    townlist.Sort(AIAbstractList.SORT_BY_VALUE, false);
-
+    masterlist.Valuate(AITown.GetPopulation);
+    masterlist.Sort(AIAbstractList.SORT_BY_VALUE, false);
+    local townAlist = masterlist;
+    local townBlist = masterlist;
     /* Pick the two towns with the highest population. */
-    local townid_a = townlist.Begin();
-    local townid_b = townlist.Next();
+    local townid_a = townAlist.Begin();
+    local townid_b = townBlist.Begin();
     
-    while(AITown.GetDistanceManhattanToTile(townid_a, AITown.GetLocation(townid_b)) > 70 && !RoadManager.IsConnected(townid_a, townid_b)) {
+    while(AITown.GetDistanceManhattanToTile(townid_a, AITown.GetLocation(townid_b)) > 70 || townid_a == townid_b || RoadManager.IsConnected(townid_a, townid_b)) {
         AILog.Info("Dist: " + AITown.GetDistanceManhattanToTile(townid_a, AITown.GetLocation(townid_b)));
-        townid_b = townlist.Next();
+        if(townBlist.HasNext()){
+            townid_b = townBlist.Next();
+        } 
+        else if (townAlist.HasNext()) {
+            townid_a = townAlist.Next()    
+            townBlist = masterlist;
+        } 
+        else return false;
     }
     
     local townloc_a = AITown.GetLocation(townid_a);
     local townloc_b = AITown.GetLocation(townid_b);
     AILog.Info("Connecting " + AITown.GetName(townid_a) + " with " + AITown.GetName(townid_b));
     if(RoadManager.ConnectTiles(townloc_a, townloc_b)) {
-        if(!RoadManager.Contains(RoadManager.connected_towns, townid_a)) connected_towns.townid_a <- []
-        if(!RoadManager.Contains(RoadManager.connected_towns, townid_b)) connected_towns.townid_b <- []
         local src = RoadManager.BuildSourceStationNear(townloc_a, passenger_cargo);
         local dst = RoadManager.BuildDestinationStationNear(townloc_b, passenger_cargo); 
         if(src != null && dst != null) {
@@ -62,9 +64,8 @@ function RoadManager::ConnectNewCities(passenger_cargo) {
                 AIOrder.AppendOrder(vehicle, src, AIOrder.OF_NONE);
                 AIOrder.AppendOrder(vehicle, dst, AIOrder.OF_NONE);
                 AIVehicle.StartStopVehicle(vehicle);
-                RoadManager.connected_towns.townid_a.append(townid_b);
-                RoadManager.connected_towns.townid_b.append(townid_a);
-                RoadManager.connected_towns_count = RoadManager.connected_towns_count + 2;
+                if(!connected_towns.HasItem(townid_a)) connected_towns.AddItem(townid_a, 0);
+                if(!connected_towns.HasItem(townid_b)) connected_towns.AddItem(townid_b, 0);
             }
         }
     }
